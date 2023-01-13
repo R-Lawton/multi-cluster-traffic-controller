@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	runtimeUtil "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -18,6 +19,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	trafficController "github.com/Kuadrant/multi-cluster-traffic-controller/pkg/controllers/traffic"
+	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/dns"
+	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/tls"
 	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/traffic"
 )
 
@@ -31,7 +34,7 @@ type ResourceHandler interface {
 	Handle(context.Context, runtime.Object) (ctrl.Result, error)
 }
 
-func NewTrafficHandlerFactory() ResourceHandlerFactory {
+func NewTrafficHandlerFactory(dnsService *dns.Service, tlsService *tls.Service) ResourceHandlerFactory {
 	return func(config *rest.Config, controlClient client.Client) (ResourceHandler, error) {
 		c, err := client.New(config, client.Options{})
 		if err != nil {
@@ -40,6 +43,8 @@ func NewTrafficHandlerFactory() ResourceHandlerFactory {
 		trafficHandler := &trafficController.Reconciler{
 			WorkloadClient: c,
 			ControlClient:  controlClient,
+			Hosts:          dnsService,
+			Certificates:   tlsService,
 		}
 		return trafficHandler, nil
 	}
@@ -96,7 +101,11 @@ func (w *ClusterWatcher) Start(ctx context.Context) error {
 			current := obj.(*networkingv1.Ingress)
 			target := current.DeepCopy()
 			targetAccessor := traffic.NewIngress(target)
-			w.Handler.Handle(ctx, targetAccessor)
+			_, err := w.Handler.Handle(ctx, targetAccessor)
+			if err != nil {
+				runtimeUtil.HandleError(err)
+				return
+			}
 			//todo handle requeue and errors
 			if !equality.Semantic.DeepEqual(current, target) {
 				//write back to cluster
@@ -108,7 +117,11 @@ func (w *ClusterWatcher) Start(ctx context.Context) error {
 			current := obj.(*networkingv1.Ingress)
 			target := current.DeepCopy()
 			targetAccessor := traffic.NewIngress(target)
-			w.Handler.Handle(ctx, targetAccessor)
+			_, err := w.Handler.Handle(ctx, targetAccessor)
+			if err != nil {
+				runtimeUtil.HandleError(err)
+				return
+			}
 			//todo handle requeue and errors
 			if !equality.Semantic.DeepEqual(current, target) {
 				//write back to cluster
@@ -120,7 +133,11 @@ func (w *ClusterWatcher) Start(ctx context.Context) error {
 			current := obj.(*networkingv1.Ingress)
 			target := current.DeepCopy()
 			targetAccessor := traffic.NewIngress(target)
-			w.Handler.Handle(ctx, targetAccessor)
+			_, err := w.Handler.Handle(ctx, targetAccessor)
+			if err != nil {
+				runtimeUtil.HandleError(err)
+				return
+			}
 			//todo handle requeue and errors
 			if !equality.Semantic.DeepEqual(current, target) {
 				//write back to cluster

@@ -5,6 +5,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/strings/slices"
@@ -34,6 +35,40 @@ func (a *Ingress) GetHosts() []string {
 	}
 
 	return hosts
+}
+
+func (a *Ingress) AddManagedHost(h string) error {
+	// rules to add to the spec
+	additionalRules := []networkingv1.IngressRule{}
+	// rules we have covered already in the spec
+	coveredRules := []*networkingv1.HTTPIngressRuleValue{}
+	for _, existing := range a.Spec.Rules {
+		if existing.Host == h {
+			coveredRules = append(coveredRules, existing.HTTP)
+		}
+	}
+
+	var isCovered = func(val *networkingv1.HTTPIngressRuleValue) bool {
+		for _, ar := range coveredRules {
+			if equality.Semantic.DeepEqual(ar, val) {
+				return true
+			}
+		}
+		return false
+	}
+	// we now know what rules we have already covered so now calculate any new ones
+	for _, existing := range a.Spec.Rules {
+		if existing.Host == h || isCovered(existing.HTTP) {
+			continue
+		}
+
+		additional := existing.DeepCopy()
+		additional.Host = h
+		additionalRules = append(additionalRules, *additional)
+		coveredRules = append(coveredRules, additional.HTTP)
+	}
+	a.Spec.Rules = append(a.Spec.Rules, additionalRules...)
+	return nil
 }
 
 func (a *Ingress) AddTLS(host string, secret *corev1.Secret) {

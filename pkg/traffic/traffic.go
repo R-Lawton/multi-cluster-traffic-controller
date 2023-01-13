@@ -16,6 +16,7 @@ type DeleteTraffic func(ctx context.Context, i Interface) error
 type Interface interface {
 	runtime.Object
 	metav1.Object
+	AddManagedHost(h string) error
 	GetKind() string
 	GetHosts() []string
 	GetCacheKey() string

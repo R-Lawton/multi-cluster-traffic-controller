@@ -50,6 +50,11 @@ deployCertManager() {
   ${KUSTOMIZE_BIN} build ${CERT_MANAGER_KUSTOMIZATION_DIR} --enable-helm --helm-command ${HELM_BIN} | kubectl apply -f -
   echo "Waiting for Cert Manager deployments to be ready..."
   kubectl -n cert-manager wait --timeout=300s --for=condition=Available deployments --all
+
+  k delete validatingWebhookConfiguration mctc-cert-manager-webhook
+  k delete mutatingWebhookConfiguration mctc-cert-manager-webhook
+  # Apply the default glbc-ca issuer
+  kubectl create -n cert-manager -f ./config/default/issuer.yaml
 }
 
 deployExternalDNS() {
