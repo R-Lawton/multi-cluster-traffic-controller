@@ -71,9 +71,11 @@ func (s *Service) RegisterHost(ctx context.Context, h string, zone v1.DNSZone) (
 		return nil, err
 	}
 	//host may already be present
-	err = s.controlClient.Get(ctx, client.ObjectKeyFromObject(&dnsRecord), &dnsRecord)
-	if err != nil {
-		return nil, err
+	if err != nil && k8serrors.IsAlreadyExists(err) {
+		err = s.controlClient.Get(ctx, client.ObjectKeyFromObject(&dnsRecord), &dnsRecord)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &dnsRecord, nil
 }

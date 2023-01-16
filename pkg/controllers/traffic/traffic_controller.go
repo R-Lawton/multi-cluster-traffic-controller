@@ -19,6 +19,8 @@ package traffic
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -28,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	kuadrantv1 "github.com/Kuadrant/multi-cluster-traffic-controller/pkg/apis/v1"
+	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/dns"
+	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/dns/aws"
 	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/traffic"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,6 +43,7 @@ type Reconciler struct {
 	ControlClient  client.Client
 	Hosts          HostService
 	Certificates   CertificateService
+	HostResolver   dns.HostResolver
 }
 
 type HostService interface {
@@ -103,6 +108,87 @@ func (r *Reconciler) Handle(ctx context.Context, o runtime.Object) (ctrl.Result,
 			}
 		}
 	}
-
+	activeDNSTargetIPs := map[string][]string{}
+	targets, err := trafficAccessor.GetDNSTargets()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	for _, target := range targets {
+		host := target.Value
+		if target.TargetType == kuadrantv1.TargetTypeIP {
+			activeDNSTargetIPs[host] = append(activeDNSTargetIPs[host], host)
+			continue
+		}
+		addr, err := r.HostResolver.LookupIPAddr(ctx, host)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("DNSLookup failed for host %s : %s", host, err)
+		}
+		for _, add := range addr {
+			activeDNSTargetIPs[host] = append(activeDNSTargetIPs[host], add.IP.String())
+		}
+	}
+	//TODO we need to watch certs / secrets and trigger reconcle
+	copyDNS := managedHostRecord.DeepCopy()
+	r.setEndpointFromTargets(managedHostRecord.Name, activeDNSTargetIPs, copyDNS)
+	fmt.Println("updated dNSRecordn ", copyDNS.Spec)
+	if err := r.WorkloadClient.Update(ctx, copyDNS, &client.UpdateOptions{}); err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
+}
+
+func (r *Reconciler) setEndpointFromTargets(dnsName string, dnsTargets map[string][]string, dnsRecord *kuadrantv1.DNSRecord) {
+	currentEndpoints := make(map[string]*kuadrantv1.Endpoint, len(dnsRecord.Spec.Endpoints))
+	for _, endpoint := range dnsRecord.Spec.Endpoints {
+		address, ok := endpoint.GetAddress()
+		if !ok {
+			continue
+		}
+		currentEndpoints[address] = endpoint
+	}
+	var (
+		newEndpoints []*kuadrantv1.Endpoint
+		endpoint     *kuadrantv1.Endpoint
+	)
+	ok := false
+	for _, targets := range dnsTargets {
+		for _, target := range targets {
+			// If the endpoint for this target does not exist, add a new one
+			if endpoint, ok = currentEndpoints[target]; !ok {
+				endpoint = &kuadrantv1.Endpoint{
+					SetIdentifier: target,
+				}
+			}
+			// Update the endpoint fields
+			endpoint.DNSName = dnsName
+			endpoint.RecordType = "A"
+			endpoint.Targets = []string{target}
+			endpoint.RecordTTL = 60
+			endpoint.SetProviderSpecific(aws.ProviderSpecificWeight, awsEndpointWeight(len(targets)))
+			newEndpoints = append(newEndpoints, endpoint)
+		}
+	}
+
+	sort.Slice(newEndpoints, func(i, j int) bool {
+		return newEndpoints[i].Targets[0] < newEndpoints[j].Targets[0]
+	})
+
+	dnsRecord.Spec.Endpoints = newEndpoints
+}
+
+// awsEndpointWeight returns the weight Value for a single AWS record in a set of records where the traffic is split
+// evenly between a number of clusters/ingresses, each splitting traffic evenly to a number of IPs (numIPs)
+//
+// Divides the number of IPs by a known weight allowance for a cluster/ingress, note that this means:
+// * Will always return 1 after a certain number of ips is reached, 60 in the current case (maxWeight / 2)
+// * Will return values that don't add up to the total maxWeight when the number of ingresses is not divisible by numIPs
+//
+// The aws weight value must be an integer between 0 and 255.
+// https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-weighted.html#rrsets-values-weighted-weight
+func awsEndpointWeight(numIPs int) string {
+	maxWeight := 120
+	if numIPs > maxWeight {
+		numIPs = maxWeight
+	}
+	return strconv.Itoa(maxWeight / numIPs)
 }

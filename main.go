@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -65,7 +66,7 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8088", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -110,7 +111,7 @@ func main() {
 	dnsService := dns.NewService(mgr.GetClient(), defaultCtrlNS)
 	certService := tls.NewService(mgr.GetClient(), defaultCtrlNS, defaultCertProvider)
 
-	trafficHandler := multiClusterWatch.NewTrafficHandlerFactory(dnsService, certService)
+	trafficHandler := multiClusterWatch.NewTrafficHandlerFactory(dnsService, certService, getDNSUtilities("default"))
 	if err = (&secret.SecretReconciler{
 		Client:  mgr.GetClient(),
 		Scheme:  mgr.GetScheme(),
@@ -134,5 +135,24 @@ func main() {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
+	}
+}
+
+func getDNSUtilities(hostResolverType string) dns.HostResolver {
+	switch hostResolverType {
+	case "default":
+		fmt.Println("using defualt host resolver")
+		return dns.NewDefaultHostResolver()
+	case "e2e-mock":
+		fmt.Println("using e2e-mock host resolver")
+		resolver := &dns.ConfigMapHostResolver{
+			Name:      "hosts",
+			Namespace: "kcp-glbc",
+		}
+
+		return resolver
+	default:
+		fmt.Println("using default host resolver")
+		return dns.NewDefaultHostResolver()
 	}
 }

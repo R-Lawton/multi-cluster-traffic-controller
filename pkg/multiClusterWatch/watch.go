@@ -34,7 +34,7 @@ type ResourceHandler interface {
 	Handle(context.Context, runtime.Object) (ctrl.Result, error)
 }
 
-func NewTrafficHandlerFactory(dnsService *dns.Service, tlsService *tls.Service) ResourceHandlerFactory {
+func NewTrafficHandlerFactory(dnsService *dns.Service, tlsService *tls.Service, hostResolver dns.HostResolver) ResourceHandlerFactory {
 	return func(config *rest.Config, controlClient client.Client) (ResourceHandler, error) {
 		c, err := client.New(config, client.Options{})
 		if err != nil {
@@ -45,6 +45,7 @@ func NewTrafficHandlerFactory(dnsService *dns.Service, tlsService *tls.Service) 
 			ControlClient:  controlClient,
 			Hosts:          dnsService,
 			Certificates:   tlsService,
+			HostResolver:   hostResolver,
 		}
 		return trafficHandler, nil
 	}
@@ -89,12 +90,8 @@ func (w *WatchController) WatchCluster(config *rest.Config) (Watcher, error) {
 	return watcher, nil
 }
 
-func (w *ClusterWatcher) Start(ctx context.Context) error {
-	log.Log.Info("Starting cluster watcher", "name", w.ClusterName)
-
-	informerFactory := informers.NewSharedInformerFactory(w.client, RESYNC_PERIOD)
-
-	informer := informerFactory.Networking().V1().Ingresses().Informer()
+func (w *ClusterWatcher) WatchIngress(ctx context.Context, sharedInformer informers.SharedInformerFactory) {
+	informer := sharedInformer.Networking().V1().Ingresses().Informer()
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			log.Log.Info("got add event for ingress", "cluster watcher", w.ClusterName, "ingress", obj.(*networkingv1.Ingress).Namespace+"/"+obj.(*networkingv1.Ingress).Name)
@@ -106,6 +103,7 @@ func (w *ClusterWatcher) Start(ctx context.Context) error {
 				runtimeUtil.HandleError(err)
 				return
 			}
+
 			//todo handle requeue and errors
 			if !equality.Semantic.DeepEqual(current, target) {
 				//write back to cluster
@@ -145,7 +143,13 @@ func (w *ClusterWatcher) Start(ctx context.Context) error {
 			}
 		},
 	})
+}
 
+func (w *ClusterWatcher) Start(ctx context.Context) error {
+	log.Log.Info("Starting cluster watcher", "name", w.ClusterName)
+
+	informerFactory := informers.NewSharedInformerFactory(w.client, RESYNC_PERIOD)
+	w.WatchIngress(ctx, informerFactory)
 	informerFactory.Start(ctx.Done())
 	informerFactory.WaitForCacheSync(ctx.Done())
 

@@ -3,6 +3,7 @@ package traffic
 import (
 	"context"
 
+	kuadrantv1 "github.com/Kuadrant/multi-cluster-traffic-controller/pkg/apis/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +25,7 @@ type Interface interface {
 	AddTLS(host string, secret *corev1.Secret)
 	RemoveTLS(host []string)
 	GetSpec() interface{}
+	GetDNSTargets() ([]kuadrantv1.Target, error)
 }
 
 type Pending struct {
