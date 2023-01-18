@@ -21,7 +21,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/admission"
+	"golang.org/x/sync/errgroup"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/kubernetes/scheme"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
@@ -66,11 +69,17 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8088", "The address the metric endpoint binds to.")
+	var WebhookPortNumber int
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.IntVar(&WebhookPortNumber, "webhooks-port", 8443, "The port of the webhooks server")
+
+	ctx := server.SetupSignalContext()
+	g, gCtx := errgroup.WithContext(ctx)
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -129,6 +138,12 @@ func main() {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
+	}
+	if WebhookPortNumber != 0 {
+		setupLog.Info("starting webhook")
+		g.Go(func() error {
+			return admission.CreateServer(gCtx, &WebhookPortNumber)
+		})
 	}
 
 	setupLog.Info("starting manager")
