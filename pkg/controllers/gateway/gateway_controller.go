@@ -19,6 +19,8 @@ package gateway
 import (
 	"context"
 	"fmt"
+	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"reflect"
 	"strings"
 	"time"
@@ -35,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -44,6 +47,7 @@ import (
 const (
 	ClusterSyncerAnnotation               = "clustersync.kuadrant.io"
 	GatewayClusterLabelSelectorAnnotation = "kuadrant.io/gateway-cluster-label-selector"
+	GatewayFinalizer                      = "kuadrant.io/gateway"
 )
 
 type HostService interface {
@@ -99,7 +103,11 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// TODO: Do we need to remove dns records and/or endpoints?
 		//       Will ownerRefs be sufficient
 		log.Info("Gateway is deleting", "gateway", previous.Name, "namespace", previous.Namespace)
-		return ctrl.Result{}, nil
+		// cleanup dns records
+		// cleunup certificates
+		err = r.cleanupCertificates(ctx, previous)
+		// delete gateway itself if it has no finalizers?
+		return ctrl.Result{}, err
 	}
 
 	// Check if the class name is one of ours
@@ -367,4 +375,62 @@ func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return slice.ContainsString(getSupportedClasses(), string(gateway.Spec.GatewayClassName))
 		})).
 		Complete(r)
+}
+
+func (r *GatewayReconciler) cleanupCertificates(ctx context.Context, gateway *gatewayv1beta1.Gateway) error {
+	var hostsToRemove []string
+	var allGateways gatewayv1beta1.GatewayList
+
+	gatewayAccessor := gateway.DeepCopy()
+	// get names of hosts for traffic object being deleted
+	for _, listener := range gatewayAccessor.Spec.Listeners {
+		if string(*listener.Hostname) != "*." {
+			hostsToRemove = append(hostsToRemove, string(*listener.Hostname))
+		}
+	}
+	// list all the traffic objects
+	err := r.Client.List(ctx, &allGateways, client.InNamespace(gateway.Namespace))
+	if err != nil {
+		return fmt.Errorf("error listing all Gateways: %s", err)
+	}
+	// for each traffic object check if host is being used
+	for _, candidateGateway := range allGateways.Items {
+		// ignore the gateway being deleted
+		if !equality.Semantic.DeepEqual(candidateGateway, gateway) {
+			// remove host from "delete" list if it is being used
+			for _, listener := range candidateGateway.Spec.Listeners {
+				for i, v := range hostsToRemove {
+					if v == string(*listener.Hostname) {
+						hostsToRemove = append(hostsToRemove[:i], hostsToRemove[i+1:]...)
+					}
+				}
+			}
+		}
+	}
+	// if there are hosts left - only deleting gateway using them
+	for _, host := range hostsToRemove {
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      host,
+				Namespace: gateway.Namespace,
+			},
+		}
+		cert := &certman.Certificate{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      host,
+				Namespace: gateway.Namespace,
+			},
+		}
+		// only secret or cert cr as well?
+		err = r.Client.Delete(ctx, secret)
+		if err != nil && !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("error deleting cert secret: %s", err)
+		}
+		err = r.Client.Delete(ctx, cert)
+		if err != nil && !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("error deleting certificate: %s", err)
+		}
+	}
+	// assumptions: all traffic objects using the same host are under the same namespace
+	return nil
 }
