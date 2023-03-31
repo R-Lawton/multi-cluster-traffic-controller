@@ -20,12 +20,11 @@ import (
 	"context"
 	"fmt"
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
+	corev1 "k8s.io/api/core/v1"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
 	"time"
-
-	corev1 "k8s.io/api/core/v1"
 
 	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/_internal/conditions"
 	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/_internal/slice"
@@ -37,7 +36,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -381,9 +379,8 @@ func (r *GatewayReconciler) cleanupCertificates(ctx context.Context, gateway *ga
 	var hostsToRemove []string
 	var allGateways gatewayv1beta1.GatewayList
 
-	gatewayAccessor := gateway.DeepCopy()
 	// get names of hosts for traffic object being deleted
-	for _, listener := range gatewayAccessor.Spec.Listeners {
+	for _, listener := range gateway.Spec.Listeners {
 		if string(*listener.Hostname) != "*." {
 			hostsToRemove = append(hostsToRemove, string(*listener.Hostname))
 		}
@@ -396,7 +393,7 @@ func (r *GatewayReconciler) cleanupCertificates(ctx context.Context, gateway *ga
 	// for each traffic object check if host is being used
 	for _, candidateGateway := range allGateways.Items {
 		// ignore the gateway being deleted
-		if !equality.Semantic.DeepEqual(candidateGateway, gateway) {
+		if candidateGateway.Name != gateway.Name && candidateGateway.DeletionTimestamp == nil {
 			// remove host from "delete" list if it is being used
 			for _, listener := range candidateGateway.Spec.Listeners {
 				for i, v := range hostsToRemove {
