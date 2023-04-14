@@ -37,6 +37,7 @@ import (
 
 	certman "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -60,7 +61,7 @@ var (
 )
 
 const (
-	TestTimeoutMedium       = time.Second * 30
+	TestTimeoutMedium       = time.Second * 10
 	TestRetryIntervalMedium = time.Millisecond * 250
 )
 
@@ -708,9 +709,13 @@ var _ = Describe("GatewayController", func() {
 		})
 		It("should delete a dnsRecord", func() {
 			Expect(k8sClient.Delete(ctx, gateway)).To(BeNil())
-
+			
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: dnsRecord.Name, Namespace: dnsRecord.Namespace}, &v1alpha1.DNSRecord{})
+				return apierrors.IsNotFound(err)
+			}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: tlsSecret.Name, Namespace: tlsSecret.Namespace}, &v1.Secret{})
 				return apierrors.IsNotFound(err)
 			}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
 			Eventually(func() bool {
