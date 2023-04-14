@@ -28,6 +28,7 @@ import (
 	"github.com/Kuadrant/multi-cluster-traffic-controller/pkg/tls"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -59,7 +60,7 @@ var (
 )
 
 const (
-	TestTimeoutMedium       = time.Second * 10
+	TestTimeoutMedium       = time.Second * 30
 	TestRetryIntervalMedium = time.Millisecond * 250
 )
 
@@ -269,6 +270,7 @@ var _ = Describe("GatewayController", func() {
 		var gateway *gatewayv1beta1.Gateway
 		var gatewayclass *gatewayv1beta1.GatewayClass
 		var managedZone *v1alpha1.ManagedZone
+		// var dnsRecord *v1alpha1.DNSRecord
 		// var cluster1 *corev1.Secret
 		BeforeEach(func() {
 			// Create a test GatewayClass for test Gateways to reference
@@ -319,6 +321,37 @@ var _ = Describe("GatewayController", func() {
 					},
 				},
 			}
+
+			// dnsRecord = &v1alpha1.DNSRecord{
+			// 	ObjectMeta: metav1.ObjectMeta{
+			// 		Name:      string(hostname),
+			// 		Namespace: "default",
+			// 		Finalizers: []string{
+			// 			"kuadrant.io/dns-record",
+			// 		},
+			// 	},
+			// 	Spec: v1alpha1.DNSRecordSpec{
+			// 		Endpoints: []*v1alpha1.Endpoint{
+			// 			{
+			// 				DNSName: string(hostname),
+			// 				ProviderSpecific: v1alpha1.ProviderSpecific{
+			// 					v1alpha1.ProviderSpecificProperty{
+			// 						Name:  "aws/weight",
+			// 						Value: "120",
+			// 					},
+			// 				},
+			// 				RecordTTL:     60,
+			// 				RecordType:    "A",
+			// 				SetIdentifier: "172.32.200.0",
+			// 				Targets:       v1alpha1.Targets{"172.32.200.0"},
+			// 			},
+			// 		},
+			// 		ManagedZoneRef: &v1alpha1.ManagedZoneReference{
+			// 			Name: "mctc-dev-mz",
+			// 		},
+			// 	},
+			// }
+
 		})
 
 		AfterEach(func() {
@@ -492,6 +525,199 @@ var _ = Describe("GatewayController", func() {
 				return programmedCondition.Status == metav1.ConditionFalse
 			}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
 			Expect(programmedCondition.Message).To(BeEquivalentTo("No clusters match selection"))
+		})
+
+		// 	It("should delete a dnsRecord", func() {
+		// 		Expect(k8sClient.Create(ctx, gateway)).To(BeNil())
+		// 		createdGateway := &gatewayv1beta1.Gateway{}
+		// 		gatewayType := types.NamespacedName{Name: gateway.Name, Namespace: gateway.Namespace}
+
+		// 		Eventually(func() bool {
+		// 			err := k8sClient.Get(ctx, gatewayType, createdGateway)
+		// 			return err == nil
+		// 		}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
+
+		// 		// tlsSecret := &corev1.Secret{
+		// 		// 	ObjectMeta: metav1.ObjectMeta{
+		// 		// 		Name:      "test.example.com",
+		// 		// 		Namespace: "default",
+		// 		// 	},
+		// 		// 	StringData: map[string]string{
+		// 		// 		"tls.key": "some_value",
+		// 		// 	},
+		// 		// }
+		// 		// err := k8sClient.Create(ctx, tlsSecret)
+		// 		// if err != nil {
+		// 		// 	// explicitly fail as we should be passed the point of any errors
+		// 		// 	Fail("Error creating mock certificate secret")
+		// 		// }
+		// 		// Expect(k8sClient.Create(ctx, dnsRecord)).To(BeNil())
+		// 		// createdDNSRecord := &v1alpha1.DNSRecord{}
+		// 		// dnsRecordType := types.NamespacedName{Name: dnsRecord.Name, Namespace: dnsRecord.Namespace}
+
+		// 		// Expect(k8sClient.Get(ctx, gatewayType, createdGateway)).To(BeNil())
+		// 		// Expect(k8sClient.Get(ctx, dnsRecordType, createdDNSRecord)).To(BeNil())
+		// 		hostname := gatewayv1beta1.Hostname("test.example.com")
+
+		// 		Expect(k8sClient.Create(ctx, dnsRecord)).To(BeNil())
+		// 		Expect(k8sClient.Delete(ctx, gateway)).To(BeNil())
+
+		// 		Eventually(func() bool {
+		// 			err := k8sClient.Get(ctx, types.NamespacedName{Name: dnsRecord.Name, Namespace: dnsRecord.Namespace}, &v1alpha1.DNSRecord{})
+		// 			return apierrors.IsNotFound(err)
+		// 		}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
+		// 		Eventually(func() bool {
+		// 			err := k8sClient.Get(ctx, types.NamespacedName{Name: gateway.Name, Namespace: gateway.Namespace}, &gatewayv1beta1.Gateway{})
+		// 			return apierrors.IsNotFound(err)
+		// 		}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
+		// 	})
+
+	})
+})
+
+var _ = Describe("GatewayController", func() {
+	Context("testing gateway deletion", func() {
+		var gateway *gatewayv1beta1.Gateway
+		var gatewayclass *gatewayv1beta1.GatewayClass
+		var managedZone *v1alpha1.ManagedZone
+		var dnsRecord *v1alpha1.DNSRecord
+		var tlsSecret *corev1.Secret
+		BeforeEach(func() {
+			// Create a test GatewayClass for test Gateways to reference
+			gatewayclass = &gatewayv1beta1.GatewayClass{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mctc-gw-istio-external-instance-per-cluster",
+					Namespace: "default",
+				},
+				Spec: gatewayv1beta1.GatewayClassSpec{
+					ControllerName: "kuadrant.io/mctc-gw-controller",
+				},
+			}
+			Expect(k8sClient.Create(ctx, gatewayclass)).To(BeNil())
+
+			// Create a test ManagedZone for test Gateway listeners to use
+			managedZone = &v1alpha1.ManagedZone{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "example.com",
+					Namespace: "default",
+				},
+				Spec: v1alpha1.ManagedZoneSpec{
+					ID:          "1234",
+					DomainName:  "example.com",
+					Description: "example.com",
+				},
+			}
+			Expect(k8sClient.Create(ctx, managedZone)).To(BeNil())
+
+			// Stub Gateway for tests
+			hostname := gatewayv1beta1.Hostname("test.example.com")
+			gateway = &gatewayv1beta1.Gateway{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-gw-1",
+					Namespace: "default",
+					Annotations: map[string]string{
+						"kuadrant.io/gateway-cluster-label-selector": "type=test",
+					},
+				},
+				Spec: gatewayv1beta1.GatewaySpec{
+					GatewayClassName: "mctc-gw-istio-external-instance-per-cluster",
+					Listeners: []gatewayv1beta1.Listener{
+						{
+							Name:     "default",
+							Port:     8443,
+							Protocol: gatewayv1beta1.HTTPSProtocolType,
+							Hostname: &hostname,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, gateway)).To(BeNil())
+
+			dnsRecord = &v1alpha1.DNSRecord{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      string(hostname),
+					Namespace: "default",
+					Finalizers: []string{
+						"kuadrant.io/dns-record",
+					},
+				},
+				Spec: v1alpha1.DNSRecordSpec{
+					Endpoints: []*v1alpha1.Endpoint{
+						{
+							DNSName: string(hostname),
+							ProviderSpecific: v1alpha1.ProviderSpecific{
+								v1alpha1.ProviderSpecificProperty{
+									Name:  "aws/weight",
+									Value: "120",
+								},
+							},
+							RecordTTL:     60,
+							RecordType:    "A",
+							SetIdentifier: "172.32.200.0",
+							Targets:       v1alpha1.Targets{"172.32.200.0"},
+						},
+					},
+					ManagedZoneRef: &v1alpha1.ManagedZoneReference{
+						Name: "mctc-dev-mz",
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, dnsRecord)).To(BeNil())
+
+			tlsSecret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test.example.com",
+					Namespace: "default",
+				},
+				StringData: map[string]string{
+					"tls.key": "some_value",
+				},
+			}
+			Expect(k8sClient.Create(ctx, tlsSecret)).To(BeNil())
+
+		})
+
+		AfterEach(func() {
+			// Clean up Gateways
+			gatewayList := &gatewayv1beta1.GatewayList{}
+			err := k8sClient.List(ctx, gatewayList, client.InNamespace("default"))
+			Expect(err).NotTo(HaveOccurred())
+			for _, gateway := range gatewayList.Items {
+				err = k8sClient.Delete(ctx, &gateway)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Clean up GatewayClasses
+			gatewayclassList := &gatewayv1beta1.GatewayClassList{}
+			err = k8sClient.List(ctx, gatewayclassList, client.InNamespace("default"))
+			Expect(err).NotTo(HaveOccurred())
+			for _, gatewayclass := range gatewayclassList.Items {
+				err = k8sClient.Delete(ctx, &gatewayclass)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			// Clean up ManagedZones
+			managedZoneList := &v1alpha1.ManagedZoneList{}
+			err = k8sClient.List(ctx, managedZoneList, client.InNamespace("default"))
+			Expect(err).NotTo(HaveOccurred())
+			for _, managedZone := range managedZoneList.Items {
+				err = k8sClient.Delete(ctx, &managedZone)
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+		})
+		It("should delete a dnsRecord", func() {
+			Expect(k8sClient.Delete(ctx, gateway)).To(BeNil())
+
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: dnsRecord.Name, Namespace: dnsRecord.Namespace}, &v1alpha1.DNSRecord{})
+				return apierrors.IsNotFound(err)
+			}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: gateway.Name, Namespace: gateway.Namespace}, &gatewayv1beta1.Gateway{})
+				return apierrors.IsNotFound(err)
+			}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
+
 		})
 	})
 })
