@@ -107,9 +107,16 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if previous.GetDeletionTimestamp() != nil && !previous.GetDeletionTimestamp().IsZero() {
 		log.Info("Deleting gateway", "gateway", previous.Name, "namespace", previous.Namespace)
 		//delete dnsRecord
-		r.DNSDeletion(ctx, *previous)
+		err := r.DNSDeletion(ctx, *previous)
+		if err != nil{
+			log.Error(err, "Error deleting DNS record")
+		}
+
 		// Cleanup certificates
-		r.cleanupCertificates(ctx, previous)
+		err = r.cleanupCertificates(ctx, previous)
+		if err != nil{
+			log.Error(err, "Error deleting certs")
+		}
 		controllerutil.RemoveFinalizer(previous, GatewayFinalizer)
 		err = r.Update(ctx, previous)
 		if err != nil {
