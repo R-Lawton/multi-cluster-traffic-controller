@@ -143,7 +143,7 @@ var _ = BeforeSuite(func() {
 		Client:       k8sManager.GetClient(),
 		Scheme:       k8sManager.GetScheme(),
 		Certificates: certificates,
-		Host:         dns,
+		HostService:  dns,
 		Placement:    plc,
 	}).SetupWithManager(k8sManager, ctx)
 	Expect(err).ToNot(HaveOccurred())
@@ -313,6 +313,10 @@ var _ = Describe("GatewayController", func() {
 					ID:          "1234",
 					DomainName:  "example.com",
 					Description: "example.com",
+					ProviderRef: &v1alpha1.ProviderRef{
+						Name:      "secretName",
+						Namespace: defaultNS,
+					},
 				},
 			}
 
@@ -418,6 +422,19 @@ var _ = Describe("GatewayController", func() {
 					"tls.key": "some_value",
 				},
 			}
+
+			providerSecrets := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "secretName",
+					Namespace: "default",
+				},
+				StringData: map[string]string{
+					"AWS_ACCESS_KEY_ID":     "balh",
+					"AWS_SECRET_ACCESS_KEY": "balh",
+					"REGION":                "blah",
+				},
+			}
+			Expect(k8sClient.Create(ctx, providerSecrets)).To(BeNil())
 
 		})
 		// Occurs after the test is complete
@@ -646,6 +663,10 @@ var _ = Describe("GatewayController", func() {
 					ID:          "1234",
 					DomainName:  "example.com",
 					Description: "example.com",
+					ProviderRef: &v1alpha1.ProviderRef{
+						Name:      "secretName",
+						Namespace: "default",
+					},
 				},
 			}
 			hostname := gatewayv1beta1.Hostname("test.example.com")
