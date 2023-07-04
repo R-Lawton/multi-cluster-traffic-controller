@@ -22,12 +22,14 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description="DNSProvider ready."
 
 type DNSProvider struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec DnsProviderSpec `json:"spec,omitempty"`
+	Spec   DnsProviderSpec   `json:"spec,omitempty"`
+	Status DnsProviderStatus `json:"status,omitempty"`
 }
 type DnsProviderSpec struct {
 	// +required
@@ -68,7 +70,17 @@ type ProviderRef struct {
 type DNSProviderList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []DNSProvider `json:"items"`
+
+	Items []DNSProvider `json:"items"`
+}
+
+type DnsProviderStatus struct {
+	// List of status conditions to indicate the status of a DNSProvider.
+	// Known condition types are `Ready`.
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 func init() {

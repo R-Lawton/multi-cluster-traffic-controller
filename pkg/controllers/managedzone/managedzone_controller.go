@@ -53,8 +53,6 @@ type ManagedZoneReconciler struct {
 func (r *ManagedZoneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 	previous := &v1alpha1.ManagedZone{}
-	// log.Log.Info("jhakklahalafhfhlhlafhlafhlafhlaflhafhlafhlafhlafhlaflhafhlafhl I get here reconcile zone", "test", r)
-
 	err := r.Client.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Name}, previous)
 	if err != nil {
 		if err := client.IgnoreNotFound(err); err == nil {
@@ -145,7 +143,7 @@ func (r *ManagedZoneReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	managedZone.Status.ObservedGeneration = managedZone.Generation
-	SetManagedZoneCondition(managedZone, conditions.ConditionTypeReady, status, reason, message)
+	setManagedZoneCondition(managedZone, conditions.ConditionTypeReady, status, reason, message)
 	err = r.Status().Update(ctx, managedZone)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -208,8 +206,6 @@ func (r *ManagedZoneReconciler) getParentZone(ctx context.Context, managedZone *
 	if managedZone.Spec.ParentManagedZone == nil {
 		return nil, nil
 	}
-	log.Log.Info("I get here Parent zone", "test", r)
-
 	parentZone := &v1alpha1.ManagedZone{}
 	err := r.Client.Get(ctx, client.ObjectKey{Namespace: managedZone.Namespace, Name: managedZone.Spec.ParentManagedZone.Name}, parentZone)
 	if err != nil {

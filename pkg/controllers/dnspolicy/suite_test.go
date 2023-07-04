@@ -29,6 +29,7 @@ import (
 
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/apis/v1alpha1"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/controllers/gateway"
+	"github.com/Kuadrant/multicluster-gateway-controller/pkg/dns"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -38,6 +39,9 @@ var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
 var logger logr.Logger
+var providerFactory = func(ctx context.Context, managedZone *v1alpha1.ManagedZone) (dns.Provider, error) {
+	return &dns.FakeProvider{}, nil
+}
 
 func testClient() client.Client { return k8sClient }
 
@@ -100,6 +104,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
+	dns := dns.NewService(k8sManager.GetClient(), dns.NewSafeHostResolver(dns.NewDefaultHostResolver()))
 	plc := NewTestOCMPlacer()
 
 	dnsPolicyBaseReconciler := reconcilers.NewBaseReconciler(
@@ -112,7 +117,9 @@ var _ = BeforeSuite(func() {
 		TargetRefReconciler: reconcilers.TargetRefReconciler{
 			BaseReconciler: dnsPolicyBaseReconciler,
 		},
-		Placement: plc,
+		DNSProvider: providerFactory,
+		HostService: dns,
+		Placement:   plc,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

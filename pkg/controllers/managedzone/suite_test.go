@@ -39,7 +39,6 @@ import (
 
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/apis/v1alpha1"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/dns"
-	corev1 "k8s.io/api/core/v1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -47,17 +46,21 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var (
-	cfg       *rest.Config
-	k8sClient client.Client
-	testEnv   *envtest.Environment
-	ctx       context.Context
-	cancel    context.CancelFunc
+	cfg             *rest.Config
+	k8sClient       client.Client
+	testEnv         *envtest.Environment
+	ctx             context.Context
+	cancel          context.CancelFunc
+	providerFactory = func(ctx context.Context, managedZone *v1alpha1.ManagedZone) (dns.Provider, error) {
+		return &dns.FakeProvider{}, nil
+	}
 )
 
 const (
 	EventuallyTimeoutMedium   = time.Second * 10
 	ConsistentlyTimeoutMedium = time.Second * 60
 	TestRetryIntervalMedium   = time.Millisecond * 250
+	providerCredential        = "secretname"
 )
 
 func TestAPIs(t *testing.T) {
@@ -114,12 +117,10 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	dnsProvider := &dns.FakeProvider{}
-
 	err = (&ManagedZoneReconciler{
-		Client:  k8sManager.GetClient(),
-		Scheme:  k8sManager.GetScheme(),
-		DNSProv: dnsProvider,
+		Client:      k8sManager.GetClient(),
+		Scheme:      k8sManager.GetScheme(),
+		DNSProvider: providerFactory,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -151,23 +152,11 @@ var _ = Describe("ManagedZoneReconciler", func() {
 					ID:         "example.com",
 					DomainName: "example.com",
 					ProviderRef: &v1alpha1.ProviderRef{
-						Name:      "secretName",
+						Name:      providerCredential,
 						Namespace: "default",
 					},
 				},
 			}
-			providerSecrets := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "secretName",
-					Namespace: "default",
-				},
-				StringData: map[string]string{
-					"AWS_ACCESS_KEY_ID":     "balh",
-					"AWS_SECRET_ACCESS_KEY": "balh",
-					"REGION":                "blah",
-				},
-			}
-			Expect(k8sClient.Create(ctx, providerSecrets)).To(BeNil())
 		})
 
 		AfterEach(func() {

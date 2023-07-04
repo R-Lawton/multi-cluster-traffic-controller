@@ -72,6 +72,7 @@ const (
 	nsSpoke2Name              = "test-spoke-cluster-2"
 	defaultNS                 = "default"
 	gatewayFinalizer          = "kuadrant.io/gateway"
+	providerCredential        = "secretname"
 )
 
 func TestAPIs(t *testing.T) {
@@ -314,7 +315,7 @@ var _ = Describe("GatewayController", func() {
 					DomainName:  "example.com",
 					Description: "example.com",
 					ProviderRef: &v1alpha1.ProviderRef{
-						Name:      "secretName",
+						Name:      providerCredential,
 						Namespace: defaultNS,
 					},
 				},
@@ -422,19 +423,6 @@ var _ = Describe("GatewayController", func() {
 					"tls.key": "some_value",
 				},
 			}
-
-			providerSecrets := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "secretName",
-					Namespace: "default",
-				},
-				StringData: map[string]string{
-					"AWS_ACCESS_KEY_ID":     "balh",
-					"AWS_SECRET_ACCESS_KEY": "balh",
-					"REGION":                "blah",
-				},
-			}
-			Expect(k8sClient.Create(ctx, providerSecrets)).To(BeNil())
 
 		})
 		// Occurs after the test is complete

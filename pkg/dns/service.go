@@ -20,6 +20,7 @@ import (
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/_internal/slice"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/apis/v1alpha1"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/traffic"
+	"k8s.io/apimachinery/pkg/api/meta"
 )
 
 const (
@@ -263,6 +264,29 @@ func (s *Service) CleanupDNSRecords(ctx context.Context, owner traffic.Interface
 		}
 	}
 	return nil
+}
+
+// getDNSRecordManagedZone returns the current ManagedZone for the given DNSRecord.
+func (s *Service) GetDNSRecordManagedZone(ctx context.Context, dnsRecord *v1alpha1.DNSRecord) (*v1alpha1.ManagedZone, error) {
+
+	if dnsRecord.Spec.ManagedZoneRef == nil {
+		return nil, fmt.Errorf("no managed zone configured for : %s", dnsRecord.Name)
+	}
+
+	managedZone := &v1alpha1.ManagedZone{}
+
+	err := s.controlClient.Get(ctx, client.ObjectKey{Namespace: dnsRecord.Namespace, Name: dnsRecord.Spec.ManagedZoneRef.Name}, managedZone)
+	if err != nil {
+		return nil, err
+	}
+
+	managedZoneReady := meta.IsStatusConditionTrue(managedZone.Status.Conditions, "Ready")
+
+	if !managedZoneReady {
+		return nil, fmt.Errorf("the managed zone is not in a ready state : %s", managedZone.Name)
+	}
+
+	return managedZone, nil
 }
 
 // endpointWeight returns the weight Value for a single record in a set of records where the traffic is split

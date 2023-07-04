@@ -36,7 +36,6 @@ import (
 
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/_internal/conditions"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/apis/v1alpha1"
-	"github.com/Kuadrant/multicluster-gateway-controller/pkg/controllers/dnsrecord"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/controllers/gateway"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/dns"
 )
@@ -59,7 +58,6 @@ type DNSPolicyReconciler struct {
 	DNSProvider dns.DNSProviderFactory
 	HostService gateway.HostService
 	Placement   gateway.GatewayPlacer
-	DNSRecord   dnsrecord.DNSRecordReconciler
 }
 
 //+kubebuilder:rbac:groups=kuadrant.io,resources=dnspolicies,verbs=get;list;watch;create;update;patch;delete

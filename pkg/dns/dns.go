@@ -25,6 +25,8 @@ const (
 	DefaultTTL = 60
 )
 
+type DNSProviderFactory func(ctx context.Context, managedZone *v1alpha1.ManagedZone) (Provider, error)
+
 // Provider knows how to manage DNS zones only as pertains to routing.
 type Provider interface {
 
@@ -63,9 +65,6 @@ type FakeProvider struct{}
 
 func (*FakeProvider) Ensure(dnsRecord *v1alpha1.DNSRecord, managedZone *v1alpha1.ManagedZone) error {
 	return nil
-}
-func (*FakeProvider) CreateDNSProvider(ctx context.Context, managedZone *v1alpha1.ManagedZone) (Provider, error) {
-	return nil, nil
 }
 func (*FakeProvider) Delete(dnsRecord *v1alpha1.DNSRecord, managedZone *v1alpha1.ManagedZone) error {
 	return nil

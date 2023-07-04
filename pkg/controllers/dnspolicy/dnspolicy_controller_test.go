@@ -30,7 +30,7 @@ func testBuildManagedZone(domainName, ns string) *v1alpha1.ManagedZone {
 			DomainName:  domainName,
 			Description: domainName,
 			ProviderRef: &v1alpha1.ProviderRef{
-				Name:      "secretName",
+				Name:      "secretname",
 				Namespace: ns,
 			},
 		},
@@ -122,6 +122,20 @@ var _ = Describe("DNSPolicy", Ordered, func() {
 			}
 			return true
 		}, TestTimeoutMedium, TestRetryIntervalMedium).Should(BeTrue())
+		managedZone.Status = v1alpha1.ManagedZoneStatus{
+			Conditions: []metav1.Condition{
+				{
+					Type:               "Ready",
+					Status:             "True",
+					LastTransitionTime: metav1.Now(),
+					Message:            "Provider ensured the managed zone",
+					ObservedGeneration: 1,
+					Reason:             "ProviderSuccess",
+				},
+			},
+		}
+		Expect(k8sClient.Status().Update(ctx, managedZone)).To(BeNil())
+
 	})
 
 	Context("gateway placed", func() {
