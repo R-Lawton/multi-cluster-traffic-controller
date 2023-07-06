@@ -31,7 +31,8 @@ func NewProvider(c client.Client) *providerFactory {
 	}
 }
 
-func (p *providerFactory) loadProviderSecret(ctx context.Context, managedZone *v1alpha1.ManagedZone) (*v1.Secret, *v1alpha1.DNSProvider, error) {
+// Gets the dns provider cr and secret mentioned in the cr
+func (p *providerFactory) loadProvider(ctx context.Context, managedZone *v1alpha1.ManagedZone) (*v1.Secret, *v1alpha1.DNSProvider, error) {
 
 	dnsProvider := &v1alpha1.DNSProvider{
 		ObjectMeta: metav1.ObjectMeta{
@@ -61,13 +62,14 @@ func (p *providerFactory) loadProviderSecret(ctx context.Context, managedZone *v
 	return providerSecret, dnsProvider, nil
 }
 
+// depending on the provider type given in dnsprovider cr using the credentials supplied returns a dnsprovider.
 func (p *providerFactory) DNSProviderFactory(ctx context.Context, managedZone *v1alpha1.ManagedZone) (dns.Provider, error) {
 	var reason, message string
 	status := metav1.ConditionTrue
 	reason = "ProviderSuccess"
 	message = "Provider was created successfully from secret"
 
-	creds, provider, err := p.loadProviderSecret(ctx, managedZone)
+	creds, provider, err := p.loadProvider(ctx, managedZone)
 	if err != nil {
 		status = metav1.ConditionFalse
 		reason = "DNSProviderCredentialError"
@@ -107,17 +109,10 @@ func (p *providerFactory) DNSProviderFactory(ctx context.Context, managedZone *v
 
 		return DNSProvider, nil
 
-	case "GCP":
-		log.Log.Info("GCP")
-
-	case "AZURE":
-		log.Log.Info("AZURE")
-
 	default:
 		return nil, errUnsupportedProvider
 	}
 
-	return nil, nil
 }
 
 func setDnsProviderCondition(provider *v1alpha1.DNSProvider, conditionType string, status metav1.ConditionStatus, reason, message string) {

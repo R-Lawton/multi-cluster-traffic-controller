@@ -166,8 +166,7 @@ func (r *DNSRecordReconciler) publishRecord(ctx context.Context, dnsRecord *v1al
 
 	managedZone, err := r.HostService.GetDNSRecordManagedZone(ctx, dnsRecord)
 	if err != nil {
-		// If the Managed Zone isn't found, just continue
-		return client.IgnoreNotFound(err)
+		return err
 	}
 
 	if dnsRecord.Generation == dnsRecord.Status.ObservedGeneration {

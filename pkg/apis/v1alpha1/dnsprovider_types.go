@@ -43,22 +43,6 @@ type DNSProviderCredentials struct {
 	ProviderType string `json:"type"`
 }
 
-type DNSProviderConfig struct {
-	// Route53 configures this config to communicate with AWS Route 53
-	// +optional
-	Route53 *DNSProviderConfigRoute53 `json:"route53,omitempty"`
-}
-
-// DNSProviderConfigRoute53 is a structure containing the Route 53 configuration for AWS
-type DNSProviderConfigRoute53 struct {
-	AccessKeyID string `json:"accessKeyID,omitempty"`
-
-	SecretAccessKey string `json:"SecretAccessKey,omitempty"`
-
-	// Always set the region when using AccessKeyID and SecretAccessKey
-	Region string `json:"region,omitempty"`
-}
-
 type ProviderRef struct {
 	//+required
 	Namespace string `json:"namespace"`
