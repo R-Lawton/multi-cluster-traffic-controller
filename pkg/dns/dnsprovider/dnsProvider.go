@@ -3,9 +3,11 @@ package dnsprovider
 import (
 	"context"
 	"fmt"
-	"strings"
+	// "regexp"
 
-	"k8s.io/apimachinery/pkg/api/meta"
+	// "strings"
+
+	// "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "k8s.io/api/core/v1"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/_internal/conditions"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/apis/v1alpha1"
+	"github.com/Kuadrant/multicluster-gateway-controller/pkg/controllers/managedzone"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/dns"
 	"github.com/Kuadrant/multicluster-gateway-controller/pkg/dns/aws"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,81 +34,50 @@ func NewProvider(c client.Client) *providerFactory {
 	}
 }
 
-// Gets the dns provider cr and secret mentioned in the cr
-func (p *providerFactory) loadProvider(ctx context.Context, managedZone *v1alpha1.ManagedZone) (*v1.Secret, *v1alpha1.DNSProvider, error) {
-
-	dnsProvider := &v1alpha1.DNSProvider{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      managedZone.Spec.ProviderRef.Name,
-			Namespace: managedZone.Spec.ProviderRef.Namespace,
-		}}
-
-	err := p.Client.Get(ctx, client.ObjectKeyFromObject(dnsProvider), dnsProvider)
-	if err != nil {
-
-		return nil, nil, err
-	}
-	log.Log.Info("DNS Provider CR found:", "Name:", dnsProvider.Name)
-
-	providerSecret := &v1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      dnsProvider.Spec.Credentials.Name,
-			Namespace: dnsProvider.Spec.Credentials.Namespace,
-		}}
-
-	if err := p.Client.Get(ctx, client.ObjectKeyFromObject(providerSecret), providerSecret); err != nil {
-
-		return nil, nil, err
-
-	}
-
-	return providerSecret, dnsProvider, nil
-}
-
 // depending on the provider type given in dnsprovider cr using the credentials supplied returns a dnsprovider.
 func (p *providerFactory) DNSProviderFactory(ctx context.Context, managedZone *v1alpha1.ManagedZone) (dns.Provider, error) {
+
 	var reason, message string
 	status := metav1.ConditionTrue
 	reason = "ProviderSuccess"
 	message = "Provider was created successfully from secret"
+	providerSecret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      managedZone.Spec.SecretRef.Name,
+			Namespace: managedZone.Spec.SecretRef.Namespace,
+		}}
 
-	creds, provider, err := p.loadProvider(ctx, managedZone)
-	if err != nil {
-		status = metav1.ConditionFalse
-		reason = "DNSProviderCredentialError"
-		message = "DNS Provider credentials could not be loaded from secret"
+	if err := p.Client.Get(ctx, client.ObjectKeyFromObject(providerSecret), providerSecret); err != nil {
 
-		setDnsProviderCondition(provider, conditions.ConditionTypeReady, status, reason, message)
-		err = p.Status().Update(ctx, provider)
-		if err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("unable to load dns provider secret: %v", err)
+		return nil, err
 	}
+	// providertype, err := regexp.MatchString("kuadrant.io/",string(providerSecret.Type))
+	// if err != nil{
+	// 	return nil, err
+	// }
+	// if providerSecret.Type != providertype{
+	// 	return fmt.Errorf("")
 
-	switch strings.ToUpper(provider.Spec.Credentials.ProviderType) {
-	case "AWS":
+	// }
+
+	switch providerSecret.Type {
+	case "kuadrant.io/aws":
 		log.Log.Info("Creating DNS provider for provider type AWS")
-		DNSProvider, err := aws.NewProviderFromSecret(creds)
+		DNSProvider, err := aws.NewProviderFromSecret(providerSecret)
 		if err != nil {
 			status = metav1.ConditionFalse
 			reason = "DNSProviderErrorState"
 			message = "DNS Provider could not be created from secret"
 
-			setDnsProviderCondition(provider, conditions.ConditionTypeReady, status, reason, message)
-			err = p.Status().Update(ctx, provider)
+			managedzone.SetManagedZoneCondition(managedZone, conditions.ConditionTypeReady, status, reason, message)
+			err = p.Status().Update(ctx, managedZone)
 			if err != nil {
 				return nil, err
 			}
+
 			return nil, fmt.Errorf("unable to create dns provider from secret: %v", err)
 		}
 		log.Log.Info("Route53 provider created")
-
-		setDnsProviderCondition(provider, conditions.ConditionTypeReady, status, reason, message)
-		err = p.Status().Update(ctx, provider)
-		if err != nil {
-			return nil, err
-		}
 
 		return DNSProvider, nil
 
@@ -113,14 +85,4 @@ func (p *providerFactory) DNSProviderFactory(ctx context.Context, managedZone *v
 		return nil, errUnsupportedProvider
 	}
 
-}
-
-func setDnsProviderCondition(provider *v1alpha1.DNSProvider, conditionType string, status metav1.ConditionStatus, reason, message string) {
-	cond := metav1.Condition{
-		Type:    conditionType,
-		Status:  status,
-		Reason:  reason,
-		Message: message,
-	}
-	meta.SetStatusCondition(&provider.Status.Conditions, cond)
 }

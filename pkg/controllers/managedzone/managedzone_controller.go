@@ -143,7 +143,7 @@ func (r *ManagedZoneReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	managedZone.Status.ObservedGeneration = managedZone.Generation
-	setManagedZoneCondition(managedZone, conditions.ConditionTypeReady, status, reason, message)
+	SetManagedZoneCondition(managedZone, conditions.ConditionTypeReady, status, reason, message)
 	err = r.Status().Update(ctx, managedZone)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -338,7 +338,7 @@ func (r *ManagedZoneReconciler) parentZoneNSRecordReady(ctx context.Context, man
 }
 
 // setManagedZoneCondition adds or updates a given condition in the ManagedZone status.
-func setManagedZoneCondition(managedZone *v1alpha1.ManagedZone, conditionType string, status metav1.ConditionStatus, reason, message string) {
+func SetManagedZoneCondition(managedZone *v1alpha1.ManagedZone, conditionType string, status metav1.ConditionStatus, reason, message string) {
 	cond := metav1.Condition{
 		Type:               conditionType,
 		Status:             status,

@@ -19,6 +19,7 @@ secretGenerator:
   - name: provider-credentials
     envs:
       - ../../../provider-credentials.env
+    type: "kuadrant.io/aws"
 
 replacements:
   - source:

@@ -151,7 +151,7 @@ var _ = Describe("ManagedZoneReconciler", func() {
 				Spec: v1alpha1.ManagedZoneSpec{
 					ID:         "example.com",
 					DomainName: "example.com",
-					ProviderRef: &v1alpha1.ProviderRef{
+					SecretRef: &v1alpha1.SecretRef{
 						Name:      providerCredential,
 						Namespace: "default",
 					},

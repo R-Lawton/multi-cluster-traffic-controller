@@ -314,7 +314,7 @@ var _ = Describe("GatewayController", func() {
 					ID:          "1234",
 					DomainName:  "example.com",
 					Description: "example.com",
-					ProviderRef: &v1alpha1.ProviderRef{
+					SecretRef: &v1alpha1.SecretRef{
 						Name:      providerCredential,
 						Namespace: defaultNS,
 					},
@@ -651,7 +651,7 @@ var _ = Describe("GatewayController", func() {
 					ID:          "1234",
 					DomainName:  "example.com",
 					Description: "example.com",
-					ProviderRef: &v1alpha1.ProviderRef{
+					SecretRef: &v1alpha1.SecretRef{
 						Name:      "secretName",
 						Namespace: "default",
 					},
