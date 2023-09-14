@@ -52,7 +52,7 @@ fi
 
 
 # Prompt user for any required env vars that have not been set
-DNS_PROV=$(requiredENV "$PROVIDER")
+DNS_PROV=$(requiredENV "$PROVIDER" | tee /dev/tty)
 echo "TEEEST, $DNS_PROV" 
 
 # Default config
