@@ -79,5 +79,5 @@ local PROVIDER="dummy"
       echo "export ZONE_NAME for future executions of the script to skip this step"
       fi
     fi 
-  echo $PROVIDER
+echo $PROVIDER
 }
