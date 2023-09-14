@@ -10,7 +10,7 @@ export HELM_BIN=helm
 export KUSTOMIZE_BIN=$(dockerBinCmd "kustomize")
 
 requiredENV() {
-
+local PROVIDER="dummy"
   echo "Enter which DNS provider you will be using (gcp/aws)"
   read PROVIDER </dev/tty
   if [[ "$PROVIDER" =~ ^(gcp|aws)$ ]]; then
@@ -79,5 +79,5 @@ requiredENV() {
       echo "export ZONE_NAME for future executions of the script to skip this step"
       fi
     fi 
-    echo $PROVIDER
+  echo $PROVIDER
 }
