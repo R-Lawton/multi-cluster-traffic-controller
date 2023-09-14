@@ -37,6 +37,7 @@ export CLUSTERADM_BIN=$(dockerBinCmd "clusteradm")
 MGC_REPO=${MGC_REPO:="github.com/${MGC_ACCOUNT}/multicluster-gateway-controller.git"}
 QUICK_START_HUB_KUSTOMIZATION=${MGC_REPO}/config/quick-start/control-cluster
 QUICK_START_SPOKE_KUSTOMIZATION=${MGC_REPO}/config/quick-start/workload-cluster
+PROVIDER="dummy"
 
 set -e pipefail
 
@@ -51,7 +52,8 @@ fi
 
 
 # Prompt user for any required env vars that have not been set
-requiredENV
+DNS_PROV=$(requiredENV "$PROVIDER")
+echo "TEEEST, $DNS_PROV" 
 
 # Default config
 if [[ -z "${LOG_LEVEL}" ]]; then
