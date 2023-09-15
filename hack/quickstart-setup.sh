@@ -61,7 +61,7 @@ provider(){
   fi
 }
 
-PROVIDER=$(provider)
+PROVIDER=$(provider | tee /dev/tty )
 
 # Prompt user for any required env vars that have not been set
 requiredENV ${PROVIDER}
