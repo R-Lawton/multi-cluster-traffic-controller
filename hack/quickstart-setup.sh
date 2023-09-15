@@ -50,10 +50,22 @@ if [[ "${MGC_BRANCH}" != "main" ]]; then
 
 fi  
 
+provider(){
+  echo "Enter which DNS provider you will be using (gcp/aws)"
+  read PROVIDER </dev/tty
+  if [[ "$PROVIDER" =~ ^(gcp|aws)$ ]]; then
+    echo "Provider chosen: $PROVIDER."
+  else
+    echo "Invalid input given. Please enter either 'gcp' or 'aws' (case sensitive)."
+    exit 1
+  fi
+}
+
+PROVIDER=$(provider)
 
 # Prompt user for any required env vars that have not been set
-DNS_PROV=$(requiredENV | tee /dev/tty)
-echo "TEEEST, $DNS_PROV" 
+requiredENV ${PROVIDER}
+
 
 # Default config
 if [[ -z "${LOG_LEVEL}" ]]; then
@@ -79,7 +91,7 @@ deployOCMHub ${KIND_CLUSTER_CONTROL_PLANE} "minimal"
 # Deploy Quick start kustomize
 deployQuickStartControl ${KIND_CLUSTER_CONTROL_PLANE}
 # Initialize local dev setup for the controller on the control-plane cluster
-configureController ${KIND_CLUSTER_CONTROL_PLANE}
+configureController ${KIND_CLUSTER_CONTROL_PLANE} ${PROVIDER}
 # Deploy MetalLb
 configureMetalLB ${KIND_CLUSTER_CONTROL_PLANE} ${metalLBSubnetStart}
 configureControlCluster ${KIND_CLUSTER_CONTROL_PLANE}

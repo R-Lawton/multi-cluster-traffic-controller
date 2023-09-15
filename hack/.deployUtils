@@ -324,10 +324,11 @@ deployPrometheusForFederation() {
 
 configureController() {
     clusterName=${1}
+    PROVIDER=${2}
     kubectl config use-context kind-${clusterName}
     echo "Initialize local dev setup for the controller on ${clusterName}"
 
-  if [ -n "$MGC_AWS_ACCESS_KEY_ID" ]; then
+  if [[ "$PROVIDER" == "aws" ]];then
     cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Secret
